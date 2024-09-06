@@ -5,8 +5,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IUniswapV2Router02.sol";
 import "./interfaces/IUniswapV2Factory.sol";
-import "./EverbitsERC20.sol";
-import "./interfaces/IEverbitsERC20.sol";
+import "./EverbitsToken.sol";
+import "./interfaces/IEverbitsToken.sol";
 import "./interfaces/ILaunchpadFactory.sol";
 
 contract EverbitsIDO is Ownable {
@@ -16,7 +16,7 @@ contract EverbitsIDO is Ownable {
     event LiquidityWithdrawn(uint256 amount);
 
     IUniswapV2Router02 public uniswapV2Router;
-    IEverbitsERC20 public token;
+    IEverbitsToken public token;
     StandardIDOParams public idoParams;
     ILaunchpadFactory public launchpadFactory;
 
@@ -85,8 +85,8 @@ contract EverbitsIDO is Ownable {
     function endIdo() external {
         require(block.timestamp >= idoParams.endTimestamp, "IDO not ended yet");
         if (idoBalance >= idoParams.softCap) {
-            token = IEverbitsERC20(
-                address(new EverbitsERC20(idoParams.name, idoParams.symbol))
+            token = IEverbitsToken(
+                address(new EverbitsToken(idoParams.name, idoParams.symbol))
             );
 
             idoSuccessful = true;

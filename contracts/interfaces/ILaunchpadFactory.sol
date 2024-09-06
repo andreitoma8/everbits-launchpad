@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-struct MemeSustainedLaunch {
+struct SustainedLaunch {
     string name;
     string symbol;
     uint256 totalSupply;
-    uint256 idoSupply;
     address owner;
     bool launched;
 }
@@ -25,4 +24,9 @@ struct StandardIDOParams {
 
 interface ILaunchpadFactory {
     function getEverbitsTreasury() external view returns (address);
+
+    function isWhitelisted(
+        address token,
+        address user
+    ) external view returns (bool);
 }

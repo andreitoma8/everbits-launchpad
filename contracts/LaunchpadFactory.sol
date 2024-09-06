@@ -4,74 +4,105 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IUniswapV2Router02.sol";
-import "./EverbitsERC20.sol";
-import "./interfaces/IEverbitsERC20.sol";
+import "./interfaces/IUniswapV2Factory.sol";
+import "./EverbitsToken.sol";
+import "./SustainedLaunchToken.sol";
 import "./EverbitsIDO.sol";
+import "./interfaces/IEverbitsToken.sol";
+import "./interfaces/ISustainedLaunchToken.sol";
 import "./interfaces/ILaunchpadFactory.sol";
 
 contract LaunchpadFactory is Ownable, ILaunchpadFactory {
-    event MemeSustainedLaunchRequested(uint256 _id);
-    event MemeSustainedLaunchExecuted(uint256 _id, address _token);
+    event sustainedLaunchRequested(uint256 _id);
+    event sustainedLaunchExecuted(uint256 _id, address _token);
     event StandardIDOCreated(address _ido);
 
     IUniswapV2Router02 public uniswapV2Router;
+    IUniswapV2Factory public uniswapV2Factory;
 
-    uint256 public memeSustainedLaunchCount;
+    uint256 public sustainedLaunchCount;
 
     address public everbitsTreasury;
 
-    mapping(uint256 => MemeSustainedLaunch) public memeSustainedLaunches;
+    mapping(uint256 => SustainedLaunch) public sustainedLaunches;
+
+    /**
+     * @notice Mapping of token to whitelisted addresses
+     */
+    mapping(address => mapping(address => bool)) public whitelist;
 
     constructor(
         address _uinswapV2Router,
+        address _uinswapV2Factory,
         address _everbitsTreasury
     ) Ownable(msg.sender) {
         uniswapV2Router = IUniswapV2Router02(_uinswapV2Router);
+        uniswapV2Factory = IUniswapV2Factory(_uinswapV2Factory);
         everbitsTreasury = _everbitsTreasury;
     }
 
-    function createMemeSustainedLaunch(
+    function createSustainedLaunch(
         string calldata name,
         string calldata symbol,
-        uint256 totalSupply,
-        uint256 idoSupply
+        uint256 totalSupply
     ) external {
-        memeSustainedLaunches[memeSustainedLaunchCount] = MemeSustainedLaunch({
+        sustainedLaunches[sustainedLaunchCount] = SustainedLaunch({
             name: name,
             symbol: symbol,
             totalSupply: totalSupply,
-            idoSupply: idoSupply,
             owner: msg.sender,
             launched: false
         });
-        memeSustainedLaunchCount++;
+        sustainedLaunchCount++;
 
-        emit MemeSustainedLaunchRequested(memeSustainedLaunchCount - 1);
+        emit sustainedLaunchRequested(sustainedLaunchCount - 1);
     }
 
-    function executeMemeSustainedLaunch(uint256 id) external payable onlyOwner {
-        MemeSustainedLaunch memory launch = memeSustainedLaunches[id];
+    function executSsustainedLaunch(
+        uint256 id,
+        uint256 _initialMaxBuyLimit,
+        uint256 _maxHolding,
+        uint256 _maxHoldingPeriod,
+        uint256 _taxPercentage
+    ) external payable onlyOwner {
+        SustainedLaunch memory launch = sustainedLaunches[id];
 
         // Create token and mint the total supply
-        EverbitsERC20 token = new EverbitsERC20(launch.name, launch.symbol); // TODO: Token should have restrictions for transfers and fees
-        token.mint(address(this), launch.totalSupply);
+        SustainedLaunchToken token = new SustainedLaunchToken(
+            launch.name,
+            launch.symbol,
+            _initialMaxBuyLimit,
+            _maxHolding,
+            _maxHoldingPeriod,
+            _taxPercentage,
+            launch.owner
+        );
 
-        // Transfer the rest of the supply to the owner
-        token.transfer(msg.sender, launch.totalSupply - launch.idoSupply);
+        whitelist[address(token)][everbitsTreasury] = true;
+        whitelist[address(token)][address(this)] = true;
+
+        // whitelist[address(token)][address(uniswapV2Router)] = true;
+        // address lp = uniswapV2Factory.createPair(
+        //     address(token),
+        //     uniswapV2Router.WETH()
+        // );
+        // whitelist[address(token)][lp] = true;
+
+        token.mint(address(this), launch.totalSupply);
 
         // Launch the token on UniSwap
         uniswapV2Router.addLiquidityETH{value: msg.value}(
             address(token),
-            launch.idoSupply,
-            launch.idoSupply,
-            msg.value,
+            launch.totalSupply,
+            0,
+            0,
             address(this),
             block.timestamp
         );
 
-        memeSustainedLaunches[id].launched = true;
+        sustainedLaunches[id].launched = true;
 
-        emit MemeSustainedLaunchExecuted(id, address(token));
+        emit sustainedLaunchExecuted(id, address(token));
     }
 
     function createStandardIDO(StandardIDOParams calldata params) external {
@@ -90,5 +121,12 @@ contract LaunchpadFactory is Ownable, ILaunchpadFactory {
 
     function setEverbitsTreasury(address _everbitsTreasury) external onlyOwner {
         everbitsTreasury = _everbitsTreasury;
+    }
+
+    function isWhitelisted(
+        address _token,
+        address _address
+    ) external view returns (bool) {
+        return whitelist[_token][_address];
     }
 }
